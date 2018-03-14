@@ -1,2 +1,3 @@
 nginx/conf/nginx-*.conf
 nginx/conf/passwd.db
+nginx/html/.well-known/

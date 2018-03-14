@@ -12,7 +12,7 @@ function jointDomain(){
     # fix me
     DOMAINS="${DOMAINS}`echo -e "$*" | sed 's/ / -d /g'`"
   else
-    DOMAINS="-d *.$1 -d www.$1 -d $1"
+    DOMAINS="-d $1"
   fi
 }
 
@@ -20,7 +20,7 @@ function jointDomain(){
 function envInit(){
     echo -e "start env init..."
     sudo apt-get update
-    sudo apt-get install -y lrzsz curl git openssl
+    sudo apt-get install -y lrzsz curl git openssl socat
     sudo cp -rf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime 
     sudo mkdir -p /data/ssl 
     cd ${INSTALL_DIR}
@@ -30,6 +30,7 @@ function envInit(){
         cd ${INSTALL_DIR}/install
         git pull
     fi
+    rm -rf /root/.acme.h
 }
 
 # install docker ce
@@ -51,21 +52,24 @@ function installNginx(){
    ngxconf="/data/install/nginx/conf/nginx-`date +%Y%m%d%H%M%S`.conf"
    cp /data/install/nginx/conf/nginx.conf ${ngxconf}
    sed "s/DOMAIN_REPLACE/$1/g" -i ${ngxconf}
-   docker run -d -v ${ngxconf}:/etc/nginx/nginx.conf -v /data/install/nginx/html:/usr/share/nginx/html --name "acme-nginx" -p 80:80 nginx:${NGINX_VERSION}
+   docker stop acme-nginx
+   docker rm acme-nginx
+   docker run --rm -d -v ${ngxconf}:/etc/nginx/nginx.conf -v /data/install/nginx/html/:/usr/share/nginx/html/ --name "acme-nginx" -p 80:80 nginx:${NGINX_VERSION}
    # run by docker 
    # must set ssl file and open 443, will the file share to github.com
 }
 
 # install let's encrypt
 function installLetSencrypt(){
-    echo -e "start install let's encrypt"
+    echo -e "start install let's encrypt: $1"
     sudo curl https://get.acme.sh | sh
-    sudo source ~/.bashrc 
-    echo -e "`acme.sh --issue $1 -w /data/install/nginx/html`"
+    echo -e "`/root/.acme.sh/acme.sh --debug --issue ${DOMAINS} -w /data/install/nginx/html`"
     # cp ssl ca to nginx conf/ssl
-    acme.sh --installcert -d $1 \
-            --keypath       /data/ssl/$1.key  \
-            --fullchainpath /data/ssl/$1.key.pem 
+    mkdir -p /data/ssl/$1
+    /root/.acme.sh/acme.sh --debug --install-cert -d $1 \
+            --cert-file /data/ssl/$1.cert \
+            --key-file /data/ssl/$1.key  \
+            --fullchain-file /data/ssl/$1/fullchain 
     openssl dhparam -out /data/ssl/dhparam.pem 2048
     docker stop acme-nginx
 }
@@ -103,16 +107,17 @@ domain="linuxcrypt.top"
 #envInit
 
 # install docker ce
-# dockerInstall
+#dockerInstall
 
 # add domain
-#jointDomain ${domain}
+jointDomain ${domain}
 
 # add http for domain
-#installNginx ${domain}
+installNginx ${domain}
 
 # create ssl ca
-#installLetSencrypt ${DOMAINS}
+echo -e "${DOMAINS}"
+installLetSencrypt ${domain}
 
 # create nginx-.conf from nginx-template.conf
 updateNginx ${domain}
