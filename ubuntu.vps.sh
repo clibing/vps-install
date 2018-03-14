@@ -12,7 +12,7 @@ function jointDomain(){
     # fix me
     DOMAINS="${DOMAINS}`echo -e "$*" | sed 's/ / -d /g'`"
   else
-    DOMAINS="-d $1"
+    DOMAINS="-d $1 -d www.$1"
   fi
 }
 
@@ -54,24 +54,27 @@ function installNginx(){
    sed "s/DOMAIN_REPLACE/$1/g" -i ${ngxconf}
    docker stop acme-nginx
    docker rm acme-nginx
-   docker run --rm -d -v ${ngxconf}:/etc/nginx/nginx.conf -v /data/install/nginx/html/:/usr/share/nginx/html/ --name "acme-nginx" -p 80:80 nginx:${NGINX_VERSION}
-   # run by docker 
-   # must set ssl file and open 443, will the file share to github.com
+   docker run -d -v ${ngxconf}:/etc/nginx/nginx.conf -v /data/install/nginx/html:/usr/share/nginx/html --name "acme-nginx" -p 80:80 nginx:${NGINX_VERSION}
 }
 
 # install let's encrypt
 function installLetSencrypt(){
-    echo -e "start install let's encrypt: $1"
+    echo -e "start install let's encrypt: $1 ${DOMAINS}"
+    rm -rf /root/.acme.sh
     sudo curl https://get.acme.sh | sh
-    echo -e "`/root/.acme.sh/acme.sh --debug --issue ${DOMAINS} -w /data/install/nginx/html`"
+    #echo -e "`/root/.acme.sh/acme.sh --debug --issue ${DOMAINS} -w /data/install/nginx/html -k 2048`"
+    #rm -rf /data/install/nginx/html/.well-known
+    echo -e "......................................."
+    /root/.acme.sh/acme.sh --issue -d linuxcrypt.top -w /data/install/
     # cp ssl ca to nginx conf/ssl
+            #--cert-file /data/ssl/$1.cert \
     mkdir -p /data/ssl/$1
-    /root/.acme.sh/acme.sh --debug --install-cert -d $1 \
-            --cert-file /data/ssl/$1.cert \
+    /root/.acme.sh/acme.sh --installcert -d $1 \
             --key-file /data/ssl/$1.key  \
-            --fullchain-file /data/ssl/$1/fullchain 
-    openssl dhparam -out /data/ssl/dhparam.pem 2048
-    docker stop acme-nginx
+            --fullchain-file /data/ssl/$1/fullchain.cer
+
+    sudo openssl dhparam -out /data/ssl/dhparam.pem 2048
+    #docker stop acme-nginx
 }
 
 # set www.aliyun.com dns
@@ -116,11 +119,11 @@ jointDomain ${domain}
 installNginx ${domain}
 
 # create ssl ca
-echo -e "${DOMAINS}"
-installLetSencrypt ${domain}
+#echo -e "${DOMAINS}"
+#installLetSencrypt ${domain}
 
 # create nginx-.conf from nginx-template.conf
-updateNginx ${domain}
+#updateNginx ${domain}
 
 
 
