@@ -31,6 +31,7 @@ function envInit(){
         git pull
     fi
     rm -rf /root/.acme.h
+    mkdir -p /data/install/nginx/conf/backup
 }
 
 # install docker ce
@@ -65,7 +66,7 @@ function installLetSencrypt(){
     #echo -e "`/root/.acme.sh/acme.sh --debug --issue ${DOMAINS} -w /data/install/nginx/html -k 2048`"
     #rm -rf /data/install/nginx/html/.well-known
     echo -e "......................................."
-    /root/.acme.sh/acme.sh --issue -d linuxcrypt.top -w /data/install/
+    /root/.acme.sh/acme.sh --issue -d linuxcrypt.top -w /data/install/nginx/html/
     # cp ssl ca to nginx conf/ssl
             #--cert-file /data/ssl/$1.cert \
     mkdir -p /data/ssl/$1
@@ -90,6 +91,7 @@ function updateNginx(){
    echo -e "start install nginx will set domain: $1"
    # run by docker 
    # must set ssl file and open 443, will the file share to github.com
+   mv /data/install/nginx/conf/nginx-*.conf /data/install/nginx/conf/backup/
    ngxconf="/data/install/nginx/conf/nginx-`date +%Y%m%d%H%M%S`.conf"
    cp /data/install/nginx/conf/nginx.conf ${ngxconf} 
    sed 's/#ssl_protocols/ssl_protocols/g' -i ${ngxconf}
@@ -101,7 +103,13 @@ function updateNginx(){
    
    # stop nginx-docker
    docker rm acme-nginx
-   docker run -d -v ${ngxconf}:/etc/nginx/nginx.conf -v /data/install/nginx/html:/usr/share/nginx/html -v /data/ssl:/etc/nginx/ssl --name "acme-nginx" -p 80:80 nginx:${NGINX_VERSION}
+   docker run -d -v ${ngxconf}:/etc/nginx/nginx.conf \
+              -v /data/install/nginx/html:/usr/share/nginx/html \
+              -v /data/ssl:/etc/nginx/ssl \
+              -v /data/acme/linuxcrypt.top/ssl/$1.key:/etc/nginx/ssl/$1.key \
+              -v /data/acme/linuxcrypt.top/ssl/$1.pem:/etc/nginx/ssl/$1.pem \
+              -v /data/acme/linuxcrypt.top/ssl/dhparam.pem:/etc/nginx/ssl/dhparam.pem \
+              --name "acme-nginx" -p 80:80 -p 443:443 nginx:${NGINX_VERSION}
 }
 
 domain="linuxcrypt.top"
@@ -113,17 +121,17 @@ domain="linuxcrypt.top"
 #dockerInstall
 
 # add domain
-jointDomain ${domain}
+#jointDomain ${domain}
 
 # add http for domain
-installNginx ${domain}
+#installNginx ${domain}
 
 # create ssl ca
 #echo -e "${DOMAINS}"
 #installLetSencrypt ${domain}
 
 # create nginx-.conf from nginx-template.conf
-#updateNginx ${domain}
+updateNginx ${domain}
 
 
 
